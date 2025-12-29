@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrôle Réception - St-Luc Frameries</title>
+
+    <!-- Architecture Import Map (React 19 + Lucide) -->
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client?deps=react@19.0.0",
+    "lucide-react": "https://esm.sh/lucide-react@0.460.0?deps=react@19.0.0",
+    "react/": "https://esm.sh/react@^19.2.3/"
+  }
+}
+</script>
+
+    <!-- Transpilation JIT via Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Design via Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; margin: 0; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .font-handwriting { font-family: 'Caveat', cursive; }
+        .box-3d { transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-style: preserve-3d; }
+        .box-3d:hover { transform: translateY(-10px) rotateX(5deg); }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: slideUp 0.5s ease-out forwards; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Package, ClipboardCheck, ArrowRight, Box, 
+            CheckCircle2, AlertCircle, Check, X, 
+            PlayCircle, AlertTriangle, Truck, Info, FileText
+        } from 'lucide-react';
+
+        const SCHOOL = {
+            name: "INSTITUT SAINT-LUC DE FRAMERIES",
+            address: "Rue de la Libération 1, 7080 Frameries"
+        };
+
+        const EXERCISE = {
+            title: "Livraison Multimédia - Labo 4",
+            description: "Le fournisseur Office-Tech livre le matériel commandé le mois dernier. Attention aux détails !",
+            purchaseOrder: {
+                id: "BC-2025-0112", date: "12/02/2025",
+                vendor: { name: "OFFICE-TECH SOLUTIONS", address: "Avenue de l'Innovation 42, 1300 Wavre", details: "TVA BE0888.123.456" },
+                buyer: SCHOOL,
+                items: [
+                    { ref: "KEY-64-USB", designation: "Clé USB 64GB Kingston", quantity: 12, unit: "Pcs", pu: 15.50 },
+                    { ref: "PAP-A4-80", designation: "Ramette Papier A4 80g", quantity: 8, unit: "Ct", pu: 22.00 },
+                    { ref: "SOU-LOG-MX", designation: "Souris Logitech MX Anywhere 3S (SANS FIL)", quantity: 5, unit: "Pcs", pu: 79.00 }
+                ],
+                conditions: "Livraison franco - Paiement 30 jours fin de mois"
+            },
+            deliveryNote: {
+                id: "BL-2025-0988", date: "18/02/2025", orderRef: "BC-2025-0112", parcelCount: 3,
+                vendor: { name: "OFFICE-TECH SOLUTIONS", address: "Avenue de l'Innovation 42, 1300 Wavre", details: "TVA BE0888.123.456" },
+                buyer: SCHOOL,
+                items: [
+                    { ref: "KEY-64-USB", designation: "Clé USB 64GB Kingston", quantity: 12, unit: "Pcs" },
+                    { ref: "PAP-A4-80", designation: "Ramette Papier A4 80g", quantity: 8, unit: "Ct" }, 
+                    { ref: "SOU-LOG-M5", designation: "Souris Logitech M500 (FILAIRE)", quantity: 5, unit: "Pcs" } 
+                ],
+                conditions: "Paiement au comptant à réception" 
+            },
+            physicalDelivery: [
+                { id: 1, label: "Colis A (Accessoires)", isOpen: false, content: [{ ref: "KEY-64-USB", designation: "Clé USB 64GB", quantity: 12 }] },
+                { id: 2, label: "Colis B (Papeterie)", isOpen: false, content: [{ ref: "PAP-A4-80", designation: "Papier A4 80g", quantity: 6 }] },
+                { id: 3, label: "Colis C (Périphériques)", isOpen: false, content: [{ ref: "SOU-LOG-M5", designation: "Souris M500 (Filaire)", quantity: 5 }] }
+            ]
+        };
+
+        const DocumentView = ({ title, data, type, controls, onToggleControl, onSetExpectedQuantity, conditionError, onToggleConditionError, remarks = [] }) => {
+            const isDN = type === 'DN';
+            const isBilan = remarks.length > 0;
+
+            return (
+                <div className={`bg-white p-6 shadow-2xl border border-gray-200 text-[10px] sm:text-xs font-serif min-h-[600px] flex flex-col rounded-sm relative overflow-hidden transition-all duration-500 ${isBilan ? 'scale-95' : 'hover:shadow-blue-100'}`}>
+                    <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4 mb-6">
+                        <div>
+                            <h2 className="font-black text-blue-900 text-sm uppercase leading-none mb-1">{data.vendor.name}</h2>
+                            <p className="text-gray-500 font-sans italic">{data.vendor.address}</p>
+                        </div>
+                        <div className="text-right">
+                            <h1 className="font-black text-base uppercase tracking-widest text-slate-800">{title}</h1>
+                            <p className="font-bold text-blue-600 font-sans">N° {data.id}</p>
+                            <p className="text-gray-400 font-sans">Date: {data.date}</p>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end mb-8">
+                        <div className="w-1/2 p-3 bg-slate-50 border-l-4 border-slate-800 shadow-sm rounded-r">
+                            <p className="text-[7px] text-gray-400 font-bold uppercase mb-1 font-sans">Destinataire :</p>
+                            <p className="font-black text-slate-900">{data.buyer.name}</p>
+                            <p className="text-slate-600 font-sans">{data.buyer.address}</p>
+                        </div>
+                    </div>
+
+                    <table className="w-full mb-6 border-collapse">
+                        <thead>
+                            <tr className="bg-slate-800 text-white text-left uppercase text-[8px] tracking-widest font-sans">
+                                <th className="p-2 border border-slate-700">Référence</th>
+                                <th className="p-2 border border-slate-700">Désignation</th>
+                                <th className="p-2 border border-slate-700 text-center">Quantité</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {data.items.map((item, idx) => {
+                                const ctrl = controls?.[idx];
+                                const rowError = ctrl?.refError || ctrl?.designationError || ctrl?.quantityError;
+                                return (
+                                    <tr key={idx} className={`border-b border-slate-200 transition-colors ${rowError && !isBilan ? 'bg-red-50' : 'hover:bg-slate-50'}`}>
+                                        <td className="p-2 font-mono">
+                                            <div className="flex items-center gap-2">
+                                                {item.ref}
+                                                {isDN && !isBilan && (
+                                                    <button onClick={() => onToggleControl(idx, 'refError')} className={`p-1 rounded-full transition-all ${ctrl?.refError ? 'bg-red-600 text-white' : 'text-slate-200 hover:text-red-400'}`}>
+                                                        <AlertTriangle size={10} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-medium">{item.designation}</span>
+                                                {isDN && !isBilan && (
+                                                    <button onClick={() => onToggleControl(idx, 'designationError')} className={`p-1 rounded-full transition-all ${ctrl?.designationError ? 'bg-red-600 text-white' : 'text-slate-200 hover:text-red-400'}`}>
+                                                        <AlertTriangle size={10} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="p-2 text-center font-bold">
+                                            <div className="flex flex-col items-center gap-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">{item.quantity}</span>
+                                                    {isDN && !isBilan && (
+                                                        <button onClick={() => onToggleControl(idx, 'quantityError')} className={`p-1 rounded-full transition-all ${ctrl?.quantityError ? 'bg-red-600 text-white' : 'text-slate-200 hover:text-red-400'}`}>
+                                                            <AlertTriangle size={10} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {/* REINTEGRATION DU CHAMP QUANTITÉ RÉELLE */}
+                                                {isDN && !isBilan && ctrl?.quantityError && (
+                                                    <div className="mt-1 animate-in">
+                                                        <label className="text-[6px] text-red-600 font-black uppercase block leading-none">Reçu réel :</label>
+                                                        <input 
+                                                            type="number" 
+                                                            className="w-10 border-2 border-red-300 rounded text-[9px] p-0.5 text-center font-mono focus:ring-1 focus:ring-red-500 outline-none"
+                                                            value={ctrl.expectedQuantity || ''}
+                                                            onChange={(e) => onSetExpectedQuantity(idx, parseInt(e.target.value))}
+                                                            placeholder="?"
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+
+                    <div className="mt-auto pt-4 border-t-2 border-slate-100 flex flex-col gap-4">
+                        <div className={`p-3 rounded-xl border-l-4 transition-all ${conditionError && !isBilan ? 'bg-red-50 border-red-600 shadow-inner' : 'bg-slate-50 border-slate-300'}`}>
+                            <div className="flex items-center justify-between mb-1">
+                                <p className="font-black text-slate-800 uppercase text-[9px] flex items-center gap-2 tracking-tight">
+                                    <Info size={12} /> Conditions de paiement :
+                                </p>
+                                {isDN && !isBilan && (
+                                    <button 
+                                      onClick={onToggleConditionError} 
+                                      className={`px-3 py-1 rounded text-[8px] font-black transition-all flex items-center gap-1 ${conditionError ? 'bg-red-600 text-white shadow-lg' : 'bg-slate-200 text-slate-500 hover:bg-red-100 hover:text-red-600'}`}>
+                                        <AlertTriangle size={10} /> {conditionError ? "ERREUR SIGNALÉE" : "SIGNALER ERREUR"}
+                                    </button>
+                                )}
+                            </div>
+                            <p className="italic text-gray-500 font-sans text-[10px]">{data.conditions}</p>
+                        </div>
+                        
+                        <div className="border-2 border-dashed border-slate-200 p-4 min-h-[120px] flex flex-col rounded-xl relative bg-white/50">
+                            <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-2 text-center">Cadre réservé au visa et aux réserves</p>
+                            {isBilan && (
+                                <div className="font-handwriting text-blue-800 text-base leading-tight animate-in py-2">
+                                    <p className="underline font-bold mb-1">SOUS RÉSERVE :</p>
+                                    <ul className="list-disc ml-6 space-y-1">
+                                        {remarks.map((r, i) => <li key={i}>{r}</li>)}
+                                        {remarks.length === 0 && <li>Sans réserve - Marchandise conforme.</li>}
+                                    </ul>
+                                    <div className="mt-6 flex justify-between items-end opacity-70">
+                                        <span className="text-[10px] font-sans font-bold">Le {new Date().toLocaleDateString()}</span>
+                                        <span className="text-lg">Signature St-Luc</span>
+                                    </div>
+                                </div>
+                            )}
+                            {!isBilan && <div className="flex-grow border-b border-slate-100 opacity-20"></div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        function App() {
+            const [step, setStep] = useState('intro');
+            const [boxes, setBoxes] = useState([]);
+            const [dnControls, setDnControls] = useState({});
+            const [conditionError, setConditionError] = useState(false);
+
+            const startEx = () => {
+                setBoxes(EXERCISE.physicalDelivery.map(b => ({ ...b, isOpen: false })));
+                setDnControls({});
+                setConditionError(false);
+                setStep('quai');
+            };
+
+            const toggleBox = (id) => {
+                setBoxes(prev => prev.map(b => b.id === id ? { ...b, isOpen: !b.isOpen } : b));
+            };
+
+            const handleToggleControl = (index, field) => {
+                setDnControls(prev => {
+                    const current = prev[index] || { refError: false, designationError: false, quantityError: false, expectedQuantity: undefined };
+                    return { ...prev, [index]: { ...current, [field]: !current[field] } };
+                });
+            };
+
+            const handleSetExpectedQuantity = (index, qty) => {
+                setDnControls(prev => ({ 
+                    ...prev, 
+                    [index]: { ...prev[index], expectedQuantity: qty } 
+                }));
+            };
+
+            const getFinalRemarks = () => {
+                const list = [];
+                Object.entries(dnControls).forEach(([idx, ctrl]) => {
+                    const item = EXERCISE.deliveryNote.items[idx];
+                    if (ctrl.refError) list.push(`Réf. erronée : ${item.ref}`);
+                    if (ctrl.designationError) list.push(`Produit non conforme : ${item.designation}`);
+                    if (ctrl.quantityError) {
+                        const realQty = ctrl.expectedQuantity !== undefined ? ctrl.expectedQuantity : '?';
+                        list.push(`Écart quantité : ${realQty} reçu(s) au lieu de ${item.quantity}`);
+                    }
+                });
+                if (conditionError) list.push(`Anomalie conditions de paiement (non conformes au BC)`);
+                return list;
+            };
+
+            const countCorrectAnomalies = () => {
+                let score = 0;
+                // 1. Désignation Souris
+                if (dnControls[2]?.designationError) score++;
+                // 2. Quantité Papier (reçu 6 au lieu de 8)
+                if (dnControls[1]?.quantityError && dnControls[1]?.expectedQuantity === 6) score++;
+                // 3. Conditions de paiement
+                if (conditionError) score++;
+                return score;
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col bg-slate-50">
+                    <header className="bg-[#1e3a8a] text-white p-5 shadow-2xl sticky top-0 z-50">
+                        <div className="max-w-7xl mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="bg-white text-[#1e3a8a] px-3 py-1.5 rounded-xl font-black text-2xl">SL</div>
+                                <div className="leading-tight">
+                                    <h1 className="text-xs font-black uppercase tracking-tighter leading-none">{SCHOOL.name}</h1>
+                                    <p className="text-[10px] text-blue-300 font-bold uppercase tracking-widest italic">Section Logistique 4e</p>
+                                </div>
+                            </div>
+                            <div className="hidden sm:flex gap-10 text-[10px] font-black uppercase italic tracking-widest">
+                                <span className={step === 'quai' ? 'text-orange-400 border-b-4 border-orange-400 pb-1' : 'opacity-40'}>1. Quai</span>
+                                <span className={step === 'bureau' ? 'text-orange-400 border-b-4 border-orange-400 pb-1' : 'opacity-40'}>2. Bureau</span>
+                                <span className={step === 'bilan' ? 'text-orange-400 border-b-4 border-orange-400 pb-1' : 'opacity-40'}>3. Bilan</span>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-grow p-4 sm:p-12 max-w-7xl mx-auto w-full">
+                        {step === 'intro' && (
+                            <div className="max-w-5xl mx-auto space-y-12 animate-in text-center">
+                                <div className="bg-gradient-to-br from-[#1e3a8a] to-blue-900 p-20 text-white rounded-[4rem] shadow-2xl relative overflow-hidden">
+                                    <div className="relative z-10">
+                                        <h2 className="text-6xl font-black mb-6 italic tracking-tighter uppercase leading-none">Contrôle de Réception</h2>
+                                        <p className="text-blue-100 text-xl max-w-2xl mx-auto font-medium">
+                                            Vérifiez la marchandise au quai, comparez les documents au bureau et signez avec réserves si nécessaire.
+                                        </p>
+                                    </div>
+                                    <Truck size={240} className="absolute -right-20 -bottom-20 text-white/5 rotate-12" />
+                                </div>
+                                <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-100 flex flex-col items-center">
+                                    <div className="bg-orange-100 text-orange-600 p-6 rounded-3xl mb-8"><Package size={50}/></div>
+                                    <h3 className="text-3xl font-black text-slate-800 mb-4">{EXERCISE.title}</h3>
+                                    <p className="text-slate-500 mb-10 text-lg italic max-w-xl mx-auto leading-relaxed">{EXERCISE.description}</p>
+                                    <button onClick={startEx} className="w-full max-w-md py-6 bg-[#1e3a8a] text-white rounded-[2rem] font-black text-xl flex items-center justify-center gap-4 hover:bg-orange-600 transition-all shadow-xl uppercase">
+                                        Lancer la réception <PlayCircle size={28}/>
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 'quai' && (
+                            <div className="space-y-10 animate-in">
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-8 rounded-[3rem] shadow-sm border border-slate-200">
+                                    <div className="flex items-center gap-5">
+                                        <div className="bg-orange-500 text-white p-5 rounded-3xl shadow-lg"><Box size={36}/></div>
+                                        <div>
+                                            <h2 className="text-3xl font-black text-slate-800 uppercase italic mb-1 leading-none">Étape 1 : Le Quai</h2>
+                                            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Ouvrez les caisses pour l'inspection physique.</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setStep('bureau')} className="bg-[#1e3a8a] text-white px-12 py-5 rounded-[2rem] font-black hover:bg-blue-700 shadow-xl flex items-center gap-3 uppercase text-sm tracking-widest">
+                                        Aller au Bureau <ArrowRight />
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                                    {boxes.map(box => (
+                                        <div key={box.id} onClick={() => toggleBox(box.id)} className={`box-3d min-h-[350px] cursor-pointer rounded-[4rem] shadow-2xl flex flex-col items-center justify-center p-10 border-4 transition-all ${box.isOpen ? 'bg-white border-blue-400 scale-105' : 'bg-orange-50 border-orange-200 hover:border-orange-300'}`}>
+                                            {!box.isOpen ? (
+                                                <div className="text-center">
+                                                    <Package size={110} className="text-orange-400 mx-auto mb-6 drop-shadow-lg" />
+                                                    <span className="font-black text-slate-800 uppercase tracking-widest text-base">{box.label}</span>
+                                                    <p className="text-[11px] text-orange-600 font-black mt-6 animate-pulse uppercase border-2 border-orange-200 px-4 py-2 rounded-full">Ouvrir le colis</p>
+                                                </div>
+                                            ) : (
+                                                <div className="w-full space-y-5 animate-in">
+                                                    <h3 className="font-black text-blue-600 text-[11px] text-center uppercase tracking-[0.3em] border-b-2 border-blue-50 pb-5 mb-5">VÉRIFICATION RÉELLE</h3>
+                                                    {box.content.map((item, i) => (
+                                                        <div key={i} className="bg-slate-50 p-5 rounded-2xl flex justify-between items-center border border-slate-100">
+                                                            <div>
+                                                              <div className="text-[11px] font-black text-slate-800 uppercase leading-none mb-1">{item.designation}</div>
+                                                              <div className="text-[9px] font-mono text-slate-400 uppercase tracking-tighter">{item.ref}</div>
+                                                            </div>
+                                                            <div className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[14px] font-black italic shadow-md">x{item.quantity}</div>
+                                                        </div>
+                                                    ))}
+                                                    <p className="text-[8px] text-center text-slate-300 font-black uppercase mt-10 italic">Cliquer pour refermer</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 'bureau' && (
+                            <div className="space-y-10 animate-in">
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-6 bg-white p-8 rounded-[3rem] shadow-sm border border-slate-200">
+                                    <div className="flex items-center gap-5">
+                                        <div className="bg-blue-600 text-white p-5 rounded-3xl shadow-lg shadow-blue-100"><ClipboardCheck size={36}/></div>
+                                        <div>
+                                            <h2 className="text-3xl font-black text-slate-800 uppercase italic mb-1 leading-none">Étape 2 : Le Pointage</h2>
+                                            <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Comparez documents et physique, signalez les anomalies.</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => setStep('quai')} className="bg-slate-100 text-slate-600 px-8 py-5 rounded-[2rem] font-black border-2 border-slate-200 hover:bg-slate-200 uppercase text-xs">
+                                            Retour Quai
+                                        </button>
+                                        <button onClick={() => setStep('bilan')} className="bg-green-600 text-white px-12 py-5 rounded-[2rem] font-black hover:bg-green-700 shadow-xl flex items-center gap-3 uppercase text-sm tracking-widest">
+                                            Valider le BL <Check />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-start">
+                                    <DocumentView title="Bon de Commande (Ref)" data={EXERCISE.purchaseOrder} type="PO" />
+                                    <DocumentView 
+                                        title="Bon de Livraison (Pointage)" 
+                                        data={EXERCISE.deliveryNote} 
+                                        type="DN" 
+                                        controls={dnControls}
+                                        onToggleControl={handleToggleControl}
+                                        onSetExpectedQuantity={handleSetExpectedQuantity}
+                                        conditionError={conditionError}
+                                        onToggleConditionError={() => setConditionError(!conditionError)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 'bilan' && (
+                            <div className="max-w-6xl mx-auto animate-in space-y-12 pb-12">
+                                <div className="bg-white rounded-[4rem] shadow-2xl overflow-hidden border border-slate-100 p-8 sm:p-12">
+                                    <div className="flex flex-col lg:flex-row gap-12 items-start">
+                                        {/* Colonne Gauche : Document Final avec Visa */}
+                                        <div className="w-full lg:w-1/2 space-y-4">
+                                            <h3 className="text-xl font-black uppercase italic text-slate-800 flex items-center gap-3"><FileText className="text-blue-600"/> Bon de Livraison Signé</h3>
+                                            <p className="text-xs text-slate-500 font-medium mb-4 italic">Visualisation du document officiel avec vos réserves manuscrites :</p>
+                                            <DocumentView 
+                                                title="Bon de Livraison Officiel" 
+                                                data={EXERCISE.deliveryNote} 
+                                                type="DN" 
+                                                remarks={getFinalRemarks()}
+                                            />
+                                        </div>
+
+                                        {/* Colonne Droite : Score et Feedback */}
+                                        <div className="w-full lg:w-1/2 flex flex-col space-y-8">
+                                            <div className="bg-slate-900 p-12 rounded-[3rem] text-white text-center shadow-xl">
+                                                <div className="inline-block bg-blue-500 text-[10px] font-black uppercase px-4 py-1 rounded-full mb-6 tracking-[0.2em]">Rapport de performance</div>
+                                                <h2 className="text-5xl font-black italic uppercase tracking-tighter mb-2 leading-none text-white">SCORE : {countCorrectAnomalies()} / 3</h2>
+                                                <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.4em] mb-10">Gestion Technique Logistique</p>
+                                                
+                                                <div className="space-y-4 text-left">
+                                                    <div className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-colors ${dnControls[2]?.designationError ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide">Erreur Modèle Souris (M500 vs MX)</span>
+                                                        {dnControls[2]?.designationError ? <Check size={18}/> : <X size={18}/>}
+                                                    </div>
+                                                    <div className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-colors ${dnControls[1]?.quantityError && dnControls[1]?.expectedQuantity === 6 ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide">Écart Quantité Papier (Reçu 6 vs 8)</span>
+                                                        {dnControls[1]?.quantityError && dnControls[1]?.expectedQuantity === 6 ? <Check size={18}/> : <X size={18}/>}
+                                                    </div>
+                                                    <div className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-colors ${conditionError ? 'bg-green-500/10 border-green-500/50 text-green-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide">Conditions de paiement erronées</span>
+                                                        {conditionError ? <Check size={18}/> : <X size={18}/>}
+                                                    </div>
+                                                </div>
+
+                                                <button onClick={() => setStep('intro')} className="w-full mt-12 py-6 bg-white text-slate-900 rounded-[2rem] font-black text-lg hover:bg-orange-500 hover:text-white transition-all shadow-2xl uppercase tracking-widest">
+                                                    Nouvelle Mission <ArrowRight className="inline ml-2"/>
+                                                </button>
+                                            </div>
+
+                                            <div className="bg-blue-50 p-8 rounded-[3rem] border-2 border-blue-100 relative overflow-hidden">
+                                                <Info size={100} className="absolute -right-5 -bottom-5 text-blue-200/50 rotate-12" />
+                                                <h4 className="font-black text-blue-800 text-xs uppercase mb-4 tracking-widest flex items-center gap-2">Points Clés à Retenir</h4>
+                                                <ul className="text-slate-700 text-xs space-y-3 italic font-medium leading-relaxed relative z-10">
+                                                    <li>• Toujours comparer le <strong>BL</strong> avec le <strong>Bon de Commande</strong>.</li>
+                                                    <li>• Le contrôle physique est obligatoire avant signature.</li>
+                                                    <li>• Les réserves doivent être <strong>précises et quantifiées</strong> (ex: "manque 2 rames").</li>
+                                                    <li>• Signer avec la mention <strong>"SOUS RÉSERVE"</strong> si un doute subsiste.</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    <footer className="py-8 bg-white/60 border-t text-[10px] text-center font-black text-slate-400 uppercase tracking-[0.4em] backdrop-blur-md">
+                        © {new Date().getFullYear()} {SCHOOL.name} • FORMATION ADMINISTRATIVE TECHNIQUE
+                    </footer>
+                </div>
+            );
+        }
+
+        const container = document.getElementById('root');
+        const root = createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>

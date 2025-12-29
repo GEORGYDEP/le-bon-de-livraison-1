@@ -1,0 +1,1 @@
+// L'application est désormais entièrement contenue dans index.html pour garantir l'autonomie totale sans compilation.

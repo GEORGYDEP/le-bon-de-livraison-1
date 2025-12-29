@@ -1,0 +1,5 @@
+{
+  "name": "Simulateur de Réception de Marchandises",
+  "description": "Une application éducative interactive pour apprendre à contrôler un bon de livraison, comparer avec le bon de commande et vérifier physiquement les colis reçus.",
+  "requestFramePermissions": []
+}
