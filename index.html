@@ -39,8 +39,37 @@
 <body>
     <div id="root"></div>
 
+    <!-- ===== MODAL EMAIL (Tracking SPEC v5) ===== -->
+    <div id="emailOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);align-items:center;justify-content:center;">
+      <div style="background:#1a1a2e;border:1px solid #333;border-radius:16px;padding:32px;max-width:420px;width:90%;text-align:center;box-shadow:0 0 40px rgba(0,0,0,0.5);">
+        <div style="font-size:2rem;margin-bottom:12px;">🎓</div>
+        <h2 style="font-size:1.3rem;margin-bottom:4px;color:#eee;">Identification</h2>
+        <p style="font-size:0.85rem;color:#999;margin-bottom:20px;">Entre ton adresse email scolaire pour commencer.</p>
+        <input type="email" id="emailInput" placeholder="prenom.nom@eleve.istlm.be"
+          style="width:100%;padding:12px 16px;border-radius:10px;border:1px solid #333;background:#111;color:#eee;font-size:1rem;outline:none;margin-bottom:12px;font-family:inherit;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')validateEmail()">
+        <div id="emailError" style="color:#ff4060;font-size:0.82rem;margin-bottom:12px;min-height:1.2em;"></div>
+        <button id="emailBtn" onclick="validateEmail()"
+          style="width:100%;padding:12px;border-radius:10px;border:none;background:#22d68a;color:#0f1117;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity 0.2s;">
+          ✅ Vérifier et commencer
+        </button>
+      </div>
+    </div>
+
+    <!-- ===== MODAL CLASSEMENT (Tracking SPEC v5) ===== -->
+    <div id="lbOverlay" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);" onclick="if(event.target===this)closeLB()">
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#1a1a2e;border:1px solid #333;border-radius:16px;padding:28px;width:95%;max-width:600px;max-height:85vh;overflow-y:auto;box-shadow:0 0 40px rgba(0,0,0,0.5);color:#eee;">
+        <button onclick="closeLB()" style="position:absolute;top:12px;right:12px;background:none;border:none;color:#999;font-size:1.5rem;cursor:pointer;">✕</button>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <button id="lbTabApp" onclick="switchLBTab('app')" style="flex:1;padding:10px;border-radius:10px;border:1px solid #22d68a;background:#22d68a;color:#0f1117;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">🏆 Cette application</button>
+          <button id="lbTabGlobal" onclick="switchLBTab('global')" style="flex:1;padding:10px;border-radius:10px;border:1px solid #ff8a3d;background:transparent;color:#ff8a3d;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85rem;">🌍 Classement général</button>
+        </div>
+        <div id="lbContent"><div style="text-align:center;padding:40px;color:#999;">Chargement…</div></div>
+      </div>
+    </div>
+
     <script type="text/babel" data-type="module">
-        import React, { useState } from 'react';
+        import React, { useState, useEffect, useRef } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
             Package, ClipboardCheck, ArrowRight, Box, 
@@ -272,6 +301,22 @@
                 return score;
             };
 
+            // === TRACKING : envoi automatique du résultat à l'arrivée sur 'bilan' ===
+            const resultSentRef = useRef(false);
+            useEffect(() => {
+                if (step === 'bilan' && !resultSentRef.current) {
+                    const points = countCorrectAnomalies();
+                    const pointsMax = 3;
+                    const start = window.APP && window.APP.globalTimerStart;
+                    const temps = start ? Math.round((Date.now() - start) / 1000) : 0;
+
+                    if (typeof window.sendResult === 'function') {
+                        window.sendResult(EXERCISE.title, points, pointsMax, temps);
+                    }
+                    resultSentRef.current = true;
+                }
+            }, [step, dnControls, conditionError]);
+
             return (
                 <div className="min-h-screen flex flex-col bg-slate-50">
                     <header className="bg-[#1e3a8a] text-white p-5 shadow-2xl sticky top-0 z-50">
@@ -287,6 +332,10 @@
                                 <span className={step === 'quai' ? 'text-orange-400 border-b-4 border-orange-400 pb-1' : 'opacity-40'}>1. Quai</span>
                                 <span className={step === 'bureau' ? 'text-orange-400 border-b-4 border-orange-400 pb-1' : 'opacity-40'}>2. Bureau</span>
                                 <span className={step === 'bilan' ? 'text-orange-400 border-b-4 border-orange-400 pb-1' : 'opacity-40'}>3. Bilan</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span id="studentInfo" style={{ fontSize: '0.7rem', color: '#fff', opacity: 0.9, display: 'none' }}></span>
+                                <span id="globalTimer" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '0.85rem', color: '#fff', background: 'rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: '8px', display: 'none' }}>⏱️ 00:00</span>
                             </div>
                         </div>
                     </header>
@@ -310,6 +359,10 @@
                                     <button onClick={startEx} className="w-full max-w-md py-6 bg-[#1e3a8a] text-white rounded-[2rem] font-black text-xl flex items-center justify-center gap-4 hover:bg-orange-600 transition-all shadow-xl uppercase">
                                         Lancer la réception <PlayCircle size={28}/>
                                     </button>
+                                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '20px' }}>
+                                        <button onClick={() => window.openLB('app')} style={{ padding: '12px 24px', borderRadius: '14px', border: '2px solid #22d68a', background: 'transparent', color: '#22d68a', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.1em' }}>🏆 Classement</button>
+                                        <button onClick={() => window.openLB('global')} style={{ padding: '12px 24px', borderRadius: '14px', border: '2px solid #ff8a3d', background: 'transparent', color: '#ff8a3d', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.1em' }}>🌍 Général</button>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -431,9 +484,19 @@
                                                     </div>
                                                 </div>
 
-                                                <button onClick={() => setStep('intro')} className="w-full mt-12 py-6 bg-white text-slate-900 rounded-[2rem] font-black text-lg hover:bg-orange-500 hover:text-white transition-all shadow-2xl uppercase tracking-widest">
+                                                <button onClick={() => {
+                                                    // Régénère une nouvelle session pour la prochaine partie
+                                                    if (window.TRACKING) window.TRACKING.sessionId = new Date().toISOString();
+                                                    resultSentRef.current = false;
+                                                    setStep('intro');
+                                                }} className="w-full mt-12 py-6 bg-white text-slate-900 rounded-[2rem] font-black text-lg hover:bg-orange-500 hover:text-white transition-all shadow-2xl uppercase tracking-widest">
                                                     Nouvelle Mission <ArrowRight className="inline ml-2"/>
                                                 </button>
+
+                                                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '20px' }}>
+                                                    <button onClick={() => window.openLB('app')} style={{ padding: '10px 20px', borderRadius: '12px', border: '2px solid #22d68a', background: 'transparent', color: '#22d68a', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.1em' }}>🏆 Classement</button>
+                                                    <button onClick={() => window.openLB('global')} style={{ padding: '10px 20px', borderRadius: '12px', border: '2px solid #ff8a3d', background: 'transparent', color: '#ff8a3d', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.1em' }}>🌍 Général</button>
+                                                </div>
                                             </div>
 
                                             <div className="bg-blue-50 p-8 rounded-[3rem] border-2 border-blue-100 relative overflow-hidden">
@@ -463,6 +526,307 @@
         const container = document.getElementById('root');
         const root = createRoot(container);
         root.render(<App />);
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- TRACKING SPEC v5 — JS pur (hors Babel/module)                -->
+    <!-- ============================================================ -->
+    <script>
+    // ============================================================
+    // TRACKING — Configuration
+    // ============================================================
+    const TRACKING = {
+      appName: "Contrôle de Réception",
+      totalNiveaux: 1,
+      sessionId: null,
+      scriptUrl: "https://script.google.com/macros/s/AKfycbx9bRMVuHU2mgFLii1KcQXD3LdZahnDH1rf1cWv9RuDvQAt0l3VtLtxzmbH7MtpJWRjfA/exec"
+    };
+    window.TRACKING = TRACKING;
+
+    // Objet APP global (partagé avec React via window)
+    const APP = {
+      email: localStorage.getItem('student_email') || '',
+      classe: localStorage.getItem('student_classe') || '',
+      globalTimerStart: null,
+      globalTimerInterval: null
+    };
+    window.APP = APP;
+
+    // ============================================================
+    // TRACKING — Modal Email
+    // ============================================================
+    function showEmailModal() {
+      const overlay = document.getElementById('emailOverlay');
+      if (!overlay) return;
+      overlay.style.display = 'flex';
+      const input = document.getElementById('emailInput');
+      const saved = localStorage.getItem('student_email');
+      if (saved) input.value = saved;
+      input.focus();
+      document.getElementById('emailError').textContent = '';
+    }
+
+    function validateEmail() {
+      const input = document.getElementById('emailInput');
+      const btn = document.getElementById('emailBtn');
+      const errDiv = document.getElementById('emailError');
+      const email = input.value.trim().toLowerCase();
+
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        errDiv.textContent = '⚠️ Entre une adresse email valide.';
+        input.style.borderColor = '#ff4060';
+        return;
+      }
+
+      btn.textContent = '⏳ Vérification…';
+      btn.disabled = true;
+      errDiv.textContent = '';
+      input.style.borderColor = '';
+
+      const cbName = '_emailCb_' + Date.now();
+      const timeout = setTimeout(() => {
+        delete window[cbName];
+        const s = document.getElementById(cbName);
+        if (s) s.remove();
+        errDiv.textContent = '⚠️ Connexion impossible. Vérifie ta connexion internet.';
+        btn.textContent = '✅ Vérifier et commencer';
+        btn.disabled = false;
+      }, 10000);
+
+      window[cbName] = function(resp) {
+        clearTimeout(timeout);
+        delete window[cbName];
+        const s = document.getElementById(cbName);
+        if (s) s.remove();
+        btn.textContent = '✅ Vérifier et commencer';
+        btn.disabled = false;
+
+        if (resp && resp.found) {
+          localStorage.setItem('student_email', email);
+          localStorage.setItem('student_classe', resp.classe || '');
+          APP.email = email;
+          APP.classe = resp.classe || '';
+
+          TRACKING.sessionId = new Date().toISOString();
+          document.getElementById('emailOverlay').style.display = 'none';
+
+          const infoEl = document.getElementById('studentInfo');
+          if (infoEl) {
+            infoEl.textContent = '👤 ' + email + (resp.classe ? ' • ' + resp.classe : '');
+            infoEl.style.display = 'inline';
+          }
+
+          startGlobalTimer();
+        } else {
+          errDiv.textContent = "⚠️ Cette adresse email n'est pas enregistrée. Vérifie l'orthographe ou demande à ton professeur de t'ajouter à la liste.";
+          input.style.borderColor = '#ff4060';
+        }
+      };
+
+      const sc = document.createElement('script');
+      sc.id = cbName;
+      sc.src = TRACKING.scriptUrl + '?action=check_email&email=' + encodeURIComponent(email) + '&callback=' + cbName;
+      sc.onerror = function() {
+        clearTimeout(timeout);
+        delete window[cbName];
+        sc.remove();
+        errDiv.textContent = '⚠️ Erreur de connexion au serveur.';
+        btn.textContent = '✅ Vérifier et commencer';
+        btn.disabled = false;
+      };
+      document.body.appendChild(sc);
+    }
+    window.validateEmail = validateEmail;
+    window.showEmailModal = showEmailModal;
+
+    // ============================================================
+    // TRACKING — Chronomètre global visible
+    // ============================================================
+    function startGlobalTimer() {
+      APP.globalTimerStart = Date.now();
+      const el = document.getElementById('globalTimer');
+      if (el) el.style.display = 'inline';
+      APP.globalTimerInterval = setInterval(updateTimerDisplay, 1000);
+      updateTimerDisplay();
+    }
+
+    function updateTimerDisplay() {
+      const el = document.getElementById('globalTimer');
+      if (!el || !APP.globalTimerStart) return;
+      const elapsed = Math.floor((Date.now() - APP.globalTimerStart) / 1000);
+      el.textContent = '⏱️ ' + String(Math.floor(elapsed/60)).padStart(2,'0') + ':' + String(elapsed%60).padStart(2,'0');
+    }
+
+    // ============================================================
+    // TRACKING — Envoi des résultats
+    // ============================================================
+    function sendResult(niveau, points, pointsMax, temps) {
+      if (!APP.email) return;
+      const payload = {
+        email: APP.email,
+        classe: APP.classe,
+        app: TRACKING.appName,
+        niveau: niveau,
+        points: points,
+        pointsMax: pointsMax,
+        temps: temps,
+        totalNiveaux: TRACKING.totalNiveaux,
+        sessionId: TRACKING.sessionId
+      };
+      console.log('[TRACKING] Envoi:', payload);
+      fetch(TRACKING.scriptUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify(payload)
+      }).catch(err => console.warn('[TRACKING] Erreur:', err));
+    }
+    window.sendResult = sendResult;
+
+    // ============================================================
+    // TRACKING — Modal Classement
+    // ============================================================
+    let currentLBTab = 'app';
+
+    function openLB(tab) {
+      document.getElementById('lbOverlay').style.display = 'block';
+      switchLBTab(tab || 'app');
+    }
+    function closeLB() {
+      document.getElementById('lbOverlay').style.display = 'none';
+    }
+    window.openLB = openLB;
+    window.closeLB = closeLB;
+
+    function switchLBTab(tab) {
+      currentLBTab = tab;
+      const btnApp = document.getElementById('lbTabApp');
+      const btnGlobal = document.getElementById('lbTabGlobal');
+      if (tab === 'app') {
+        btnApp.style.background = '#22d68a'; btnApp.style.color = '#0f1117';
+        btnGlobal.style.background = 'transparent'; btnGlobal.style.color = '#ff8a3d';
+      } else {
+        btnGlobal.style.background = '#ff8a3d'; btnGlobal.style.color = '#0f1117';
+        btnApp.style.background = 'transparent'; btnApp.style.color = '#22d68a';
+      }
+      fetchLeaderboard(tab);
+    }
+    window.switchLBTab = switchLBTab;
+
+    function fetchLeaderboard(tab) {
+      const content = document.getElementById('lbContent');
+      content.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">⏳ Chargement…</div>';
+
+      const action = tab === 'app' ? 'leaderboard_app' : 'leaderboard_global';
+      const cbName = '_lbCb_' + Date.now();
+
+      const timeout = setTimeout(() => {
+        delete window[cbName];
+        const s = document.getElementById(cbName);
+        if (s) s.remove();
+        content.innerHTML = '<div style="text-align:center;padding:40px;"><div style="color:#ff4060;margin-bottom:12px;">⚠️ Connexion impossible</div><button onclick="fetchLeaderboard(\'' + tab + '\')" style="padding:8px 20px;border-radius:8px;border:1px solid #333;background:#111;color:#eee;cursor:pointer;font-family:inherit;">Réessayer</button></div>';
+      }, 10000);
+
+      window[cbName] = function(resp) {
+        clearTimeout(timeout);
+        delete window[cbName];
+        const s = document.getElementById(cbName);
+        if (s) s.remove();
+        const lbData = resp && (resp.leaderboard || resp.data);
+        if (!lbData || lbData.length === 0) {
+          content.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">🏁 Aucun résultat pour le moment</div>';
+          return;
+        }
+        renderLeaderboard(lbData, tab);
+      };
+
+      let url = TRACKING.scriptUrl + '?action=' + action + '&callback=' + cbName + '&mode=last';
+      if (tab === 'app') url += '&app=' + encodeURIComponent(TRACKING.appName);
+      if (APP.classe) url += '&classe=' + encodeURIComponent(APP.classe);
+      const sc = document.createElement('script');
+      sc.id = cbName;
+      sc.src = url;
+      sc.onerror = () => {
+        clearTimeout(timeout);
+        delete window[cbName];
+        sc.remove();
+        content.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4060;">⚠️ Erreur de connexion</div>';
+      };
+      document.body.appendChild(sc);
+    }
+    window.fetchLeaderboard = fetchLeaderboard;
+
+    function renderLeaderboard(data, tab) {
+      const content = document.getElementById('lbContent');
+      const myEmail = (APP.email || '').toLowerCase();
+
+      // Classement général : tri client par pourcentage
+      if (tab === 'global' && data.length > 0) {
+        data = data.slice().sort((a, b) => {
+          const pctA = a.pct || 0;
+          const pctB = b.pct || 0;
+          if (pctB !== pctA) return pctB - pctA;
+          return (a.totalTemps || 0) - (b.totalTemps || 0);
+        });
+        data.forEach((entry, i) => { entry.rang = i + 1; });
+      }
+
+      const me = data.find(r => r.email === myEmail);
+      let html = '';
+
+      // Encart personnel (avec fallbacks robustes — Bug critique n°1 du SPEC)
+      if (me) {
+        const pct = me.pct != null ? me.pct : (me.pourcentage != null ? me.pourcentage : 0);
+        const count = tab === 'app'
+          ? (me.niveauxCompletes || me.niveaux || 0)
+          : (me.appsCompletes || me.apps || 0);
+        const total = tab === 'app' ? (me.totalNiveaux || 0) : (me.totalPossibleNiveaux || 0);
+        const label = tab === 'app' ? 'niveaux' : 'apps';
+        const prog = total > 0 ? count + '/' + total + ' ' + label : count + ' ' + label;
+        html += '<div style="background:rgba(34,214,138,0.08);border:1px solid rgba(34,214,138,0.3);border-radius:12px;padding:16px;margin-bottom:16px;display:flex;justify-content:space-around;text-align:center;">' +
+          '<div><div style="font-size:1.3rem;font-weight:800;color:#22d68a;">#' + me.rang + '</div><div style="font-size:0.7rem;color:#999;">RANG</div></div>' +
+          '<div><div style="font-size:1.3rem;font-weight:800;color:#eee;">' + me.totalPoints + '</div><div style="font-size:0.7rem;color:#999;">POINTS</div></div>' +
+          '<div><div style="font-size:1.3rem;font-weight:800;color:' + (pct>=80?'#22d68a':pct>=50?'#ff8a3d':'#ff4060') + ';">' + pct + '%</div><div style="font-size:0.7rem;color:#999;">RÉUSSITE</div></div>' +
+          '<div><div style="font-size:1.3rem;font-weight:800;color:#999;">' + prog + '</div><div style="font-size:0.7rem;color:#999;">PROGRESSION</div></div>' +
+          '</div>';
+      }
+
+      // Tableau
+      const medals = ['🥇','🥈','🥉'];
+      html += '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;color:#eee;"><tr style="border-bottom:1px solid #333;"><th style="text-align:left;padding:8px 4px;color:#999;font-size:0.72rem;">#</th><th style="text-align:left;padding:8px 4px;color:#999;font-size:0.72rem;">Élève</th><th style="text-align:right;padding:8px 4px;color:#999;font-size:0.72rem;">Pts</th><th style="text-align:right;padding:8px 4px;color:#999;font-size:0.72rem;">%</th><th style="text-align:right;padding:8px 4px;color:#999;font-size:0.72rem;">Temps</th></tr>';
+
+      data.forEach(row => {
+        const r = row.rang || 0;
+        const name = row.email.split('@')[0].split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        const pct = row.pct != null ? row.pct : (row.pourcentage != null ? row.pourcentage : 0);
+        const temps = row.totalTemps || row.totalTime || 0;
+        const isMe = row.email === myEmail;
+        const pctC = pct >= 80 ? '#22d68a' : pct >= 50 ? '#ff8a3d' : '#ff4060';
+        let tStr = '—';
+        if (temps > 0) {
+          const m = Math.floor(temps / 60), sec = temps % 60;
+          tStr = m > 0 ? m + 'm' + String(sec).padStart(2,'0') + 's' : sec + 's';
+        }
+        html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.03);background:' + (isMe ? 'rgba(34,214,138,0.08)' : 'transparent') + ';">' +
+          '<td style="padding:8px 4px;font-weight:700;">' + (r <= 3 ? medals[r-1] : r) + '</td>' +
+          '<td style="padding:8px 4px;' + (isMe ? 'font-weight:800;color:#22d68a;' : '') + '">' + name + '</td>' +
+          '<td style="padding:8px 4px;text-align:right;font-weight:700;color:#22d68a;">' + row.totalPoints + '</td>' +
+          '<td style="padding:8px 4px;text-align:right;font-weight:700;color:' + pctC + ';">' + pct + '%</td>' +
+          '<td style="padding:8px 4px;text-align:right;color:#999;font-family:monospace;font-size:0.78rem;">' + tStr + '</td>' +
+          '</tr>';
+      });
+      html += '</table>';
+      content.innerHTML = html;
+    }
+    window.renderLeaderboard = renderLeaderboard;
+
+    // ============================================================
+    // TRACKING — Lancement automatique du modal email
+    // ============================================================
+    // On attend que React ait monté l'app (Babel transpile en async via importmap module)
+    window.addEventListener('load', function() {
+      setTimeout(showEmailModal, 300);
+    });
     </script>
 </body>
 </html>
